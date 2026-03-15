@@ -14,6 +14,8 @@ import AssetImport from "@/pages/AssetImport";
 import RisksOverview from "@/pages/RisksOverview";
 import AssetRisk from "@/pages/AssetRisk";
 import Compliance from "@/pages/Compliance";
+import Pricing from "@/pages/Pricing";
+import Profile from "@/pages/Profile";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import NotFound from "@/pages/NotFound";
@@ -41,6 +43,8 @@ const App = () => (
               <Route path="/risks" element={<RisksOverview />} />
               <Route path="/risks/assets" element={<AssetRisk />} />
               <Route path="/compliance" element={<Compliance />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/profile" element={<Profile />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

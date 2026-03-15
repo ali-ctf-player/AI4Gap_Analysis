@@ -4,8 +4,39 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, FileCode2, PlusCircle, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Upload, FileCode2, PlusCircle, CheckCircle2, AlertTriangle, Download } from "lucide-react";
 import type { AssetCategory } from "@/data/mockData";
+
+const XML_TEMPLATE_SAMPLE = `<?xml version="1.0" encoding="UTF-8"?>
+<GRCAssetImport version="1.0" generatedBy="Atlas-GRC">
+    <metadata>
+        <organization>YOUR_COMPANY_NAME</organization>
+        <exportDate>2026-03-15</exportDate>
+        <ownerTeam>Security Team</ownerTeam>
+        <note>
+            Fill each ReportHost record. Keep host-ip and host-fqdn values accurate.
+            This template is compatible with Asset Import generic XML parser.
+        </note>
+    </metadata>
+
+    <ReportHost name="web-prod-01">
+        <tag name="host-fqdn">web-prod-01.company.local</tag>
+        <tag name="host-ip">10.20.30.11</tag>
+        <tag name="operating-system">Ubuntu 22.04 LTS</tag>
+    </ReportHost>
+
+    <ReportHost name="db-prod-01">
+        <tag name="host-fqdn">db-prod-01.company.local</tag>
+        <tag name="host-ip">10.20.30.21</tag>
+        <tag name="operating-system">RHEL 9</tag>
+    </ReportHost>
+
+    <ReportHost name="laptop-finance-07">
+        <tag name="host-fqdn">laptop-finance-07.company.local</tag>
+        <tag name="host-ip">10.20.40.77</tag>
+        <tag name="operating-system">Windows 11 Pro</tag>
+    </ReportHost>
+</GRCAssetImport>`;
 
 interface ImportedAsset {
     id: string;
@@ -156,6 +187,15 @@ export default function AssetImport() {
         setStatusMessage(`Import finished. Added ${added}, skipped ${skipped} duplicate(s).`);
     };
 
+    const copyTemplateToClipboard = async () => {
+        try {
+            await navigator.clipboard.writeText(XML_TEMPLATE_SAMPLE);
+            setStatusMessage("Template copied to clipboard.");
+        } catch {
+            setStatusMessage("Copy failed. Please use the download button instead.");
+        }
+    };
+
     return (
         <div className="space-y-6 animate-fade-in">
             <div>
@@ -187,6 +227,13 @@ export default function AssetImport() {
                             </span>
                         </label>
 
+                        <Button variant="secondary" asChild>
+                            <a href="/templates/grc-asset-import-template.xml" download>
+                                <Download className="h-4 w-4" />
+                                Download Template
+                            </a>
+                        </Button>
+
                         <Button variant="outline" disabled={importedRows.length === 0} onClick={addAllAssets}>
                             <PlusCircle className="h-4 w-4" />
                             Add All to Assets
@@ -203,6 +250,32 @@ export default function AssetImport() {
                             {errorMessage}
                         </div>
                     ) : null}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">XML Template Sample</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                        Bu nümunəni birbaşa kopyalayıb doldura və sonra XML olaraq upload edə bilərsiniz.
+                    </p>
+                    <div className="overflow-x-auto rounded-md border bg-muted/30 p-3">
+                        <pre className="text-xs leading-5 text-foreground whitespace-pre">{XML_TEMPLATE_SAMPLE}</pre>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" onClick={copyTemplateToClipboard}>
+                            <FileCode2 className="h-4 w-4" />
+                            Copy Template
+                        </Button>
+                        <Button variant="secondary" asChild>
+                            <a href="/templates/grc-asset-import-template.xml" download>
+                                <Download className="h-4 w-4" />
+                                Download XML File
+                            </a>
+                        </Button>
+                    </div>
                 </CardContent>
             </Card>
 

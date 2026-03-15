@@ -1,4 +1,4 @@
-import { LayoutDashboard, Shield, Server, AlertTriangle, FileCheck, ChevronDown, Eye, Link, FolderTree, Bot, Cable, Upload } from "lucide-react";
+import { LayoutDashboard, Shield, Server, AlertTriangle, FileCheck, ChevronDown, Eye, Link, FolderTree, Bot, Cable, Upload, Tags } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
@@ -148,6 +148,15 @@ export function AppSidebar() {
                   <NavLink to="/compliance" end className="hover:bg-sidebar-accent/50" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
                     <FileCheck className="mr-2 h-4 w-4" />
                     {!collapsed && <span>Compliance</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/pricing" end className="hover:bg-sidebar-accent/50" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
+                    <Tags className="mr-2 h-4 w-4" />
+                    {!collapsed && <span>Pricing</span>}
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useGRC } from "@/contexts/GRCContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,50 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { generateAIComplianceAnalysis, type AIComplianceAnalysis } from "@/lib/geminiService";
+
+const COMPLIANCE_ANALYSIS_STORAGE_KEY = "securegrc.compliance.ai-analysis";
+
+interface StoredComplianceAnalysis {
+  signature: string;
+  updatedAt: string;
+  analysis: AIComplianceAnalysis;
+}
+
+function buildAnalysisSignature(
+  controls: ReturnType<typeof useGRC>["controls"],
+  risks: ReturnType<typeof useGRC>["risks"],
+  assets: ReturnType<typeof useGRC>["assets"],
+  compliance: number,
+) {
+  return JSON.stringify({
+    compliance,
+    assets: assets.map((asset) => ({
+      id: asset.id,
+      name: asset.name,
+      category: asset.category,
+      owner: asset.owner,
+      status: asset.status,
+      lastUpdated: asset.lastUpdated,
+    })),
+    risks: risks.map((risk) => ({
+      id: risk.id,
+      title: risk.title,
+      assetId: risk.assetId,
+      likelihood: risk.likelihood,
+      impact: risk.impact,
+      level: risk.level,
+      status: risk.status,
+      cisControlId: risk.cisControlId ?? null,
+    })),
+    controls: controls.map((control) => ({
+      id: control.id,
+      safeguards: control.safeguards.map((safeguard) => ({
+        id: safeguard.id,
+        status: safeguard.status,
+      })),
+    })),
+  });
+}
 
 function PriorityBadge({ priority }: { priority: string }) {
   const cls =
@@ -51,9 +95,32 @@ export default function Compliance() {
   const inProgress = allSafeguards.filter((s) => s.status === "in-progress").length;
 
   const [analysis, setAnalysis] = useState<AIComplianceAnalysis | null>(null);
+  const [analysisUpdatedAt, setAnalysisUpdatedAt] = useState<string | null>(null);
+  const [analysisSignature, setAnalysisSignature] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const hasHydratedCacheRef = useRef(false);
+  const lastRequestedSignatureRef = useRef<string | null>(null);
+
+  const currentSignature = useMemo(
+    () => buildAnalysisSignature(controls, risks, assets, compliance),
+    [controls, risks, assets, compliance],
+  );
+
+  const persistAnalysis = useCallback((nextAnalysis: AIComplianceAnalysis, signature: string) => {
+    const updatedAt = new Date().toISOString();
+    const payload: StoredComplianceAnalysis = {
+      signature,
+      updatedAt,
+      analysis: nextAnalysis,
+    };
+
+    localStorage.setItem(COMPLIANCE_ANALYSIS_STORAGE_KEY, JSON.stringify(payload));
+    setAnalysis(nextAnalysis);
+    setAnalysisSignature(signature);
+    setAnalysisUpdatedAt(updatedAt);
+  }, []);
 
   const toggleExpand = (id: string) => {
     setExpandedItems((prev) => {
@@ -67,20 +134,60 @@ export default function Compliance() {
     });
   };
 
-  const runAnalysis = useCallback(async () => {
+  const runAnalysis = useCallback(async (options?: { preserveCurrentAnalysis?: boolean }) => {
+    const preserveCurrentAnalysis = options?.preserveCurrentAnalysis ?? false;
+
+    lastRequestedSignatureRef.current = currentSignature;
     setLoading(true);
     setError(null);
-    setAnalysis(null);
+    if (!preserveCurrentAnalysis) {
+      setAnalysis(null);
+      setAnalysisUpdatedAt(null);
+      setAnalysisSignature(null);
+    }
+
     try {
       const result = await generateAIComplianceAnalysis(controls, risks, assets, compliance);
-      setAnalysis(result);
+      persistAnalysis(result, currentSignature);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unexpected error occurred.";
       setError(message);
     } finally {
       setLoading(false);
     }
-  }, [controls, risks, assets, compliance]);
+  }, [controls, risks, assets, compliance, currentSignature, persistAnalysis]);
+
+  useEffect(() => {
+    if (hasHydratedCacheRef.current) return;
+
+    hasHydratedCacheRef.current = true;
+    const storedValue = localStorage.getItem(COMPLIANCE_ANALYSIS_STORAGE_KEY);
+    if (!storedValue) return;
+
+    try {
+      const parsed = JSON.parse(storedValue) as StoredComplianceAnalysis;
+      setAnalysis(parsed.analysis);
+      setAnalysisUpdatedAt(parsed.updatedAt);
+      setAnalysisSignature(parsed.signature);
+    } catch {
+      localStorage.removeItem(COMPLIANCE_ANALYSIS_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedCacheRef.current) return;
+    if (!analysis) return;
+    if (analysisSignature === currentSignature) return;
+    if (loading) return;
+    if (lastRequestedSignatureRef.current === currentSignature) return;
+
+    void runAnalysis({ preserveCurrentAnalysis: true });
+  }, [analysis, analysisSignature, currentSignature, loading, runAnalysis]);
+
+  const isAnalysisStale = Boolean(analysis && analysisSignature && analysisSignature !== currentSignature);
+  const formattedUpdatedAt = analysisUpdatedAt
+    ? new Date(analysisUpdatedAt).toLocaleString()
+    : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -90,9 +197,15 @@ export default function Compliance() {
           <p className="text-muted-foreground text-sm mt-1">
             AI-powered analysis based on CIS Framework gaps
           </p>
+          {formattedUpdatedAt && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Saved AI analysis: {formattedUpdatedAt}
+              {isAnalysisStale ? " · Refreshing because assets, risks, or controls changed." : ""}
+            </p>
+          )}
         </div>
         <Button
-          onClick={runAnalysis}
+          onClick={() => void runAnalysis()}
           disabled={loading}
           className="flex items-center gap-2"
         >
@@ -147,7 +260,7 @@ export default function Compliance() {
       )}
 
       {/* Loading skeleton */}
-      {loading && (
+      {loading && !analysis && (
         <Card>
           <CardContent className="p-8 flex flex-col items-center gap-4 text-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -276,7 +389,7 @@ export default function Compliance() {
                 produce a prioritized security improvement plan.
               </p>
             </div>
-            <Button onClick={runAnalysis} className="gap-2">
+            <Button onClick={() => void runAnalysis()} className="gap-2">
               <Sparkles className="h-4 w-4" />
               Generate AI Analysis
             </Button>

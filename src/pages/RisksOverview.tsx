@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useGRC } from "@/contexts/GRCContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from "recharts";
 import { RiskLevelBadge, RiskStatusBadge } from "@/components/StatusBadge";
+import { Badge } from "@/components/ui/badge";
 import type { Risk } from "@/data/mockData";
 
 const riskColors: Record<string, string> = {
@@ -13,6 +15,7 @@ const riskColors: Record<string, string> = {
 
 export default function RisksOverview() {
   const { risks } = useGRC();
+  const [selectedCellKey, setSelectedCellKey] = useState<string | null>(null);
   const impactScale = [1, 2, 3, 4, 5];
   const likelihoodScale = [5, 4, 3, 2, 1];
 
@@ -20,6 +23,10 @@ export default function RisksOverview() {
     x: r.impact,
     y: r.likelihood,
     name: r.title,
+    assetName: r.assetName,
+    owner: r.owner,
+    status: r.status,
+    score: r.impact * r.likelihood,
     level: r.level,
   }));
 
@@ -80,6 +87,27 @@ export default function RisksOverview() {
     return "bg-success/15 border-success/30";
   };
 
+  const getScoreBand = (score: number) => {
+    if (score >= 16) return "Critical";
+    if (score >= 9) return "High";
+    if (score >= 4) return "Medium";
+    return "Low";
+  };
+
+  const getPointRadius = (level: Risk["level"]) => {
+    if (level === "Critical") return 16;
+    if (level === "High") return 14;
+    if (level === "Medium") return 12;
+    return 10;
+  };
+
+  const defaultCellKey = Array.from(matrixData.entries()).find(([, cell]) => cell.count > 0)?.[0] ?? null;
+  const activeCellKey = selectedCellKey ?? defaultCellKey;
+  const activeCell = activeCellKey ? matrixData.get(activeCellKey) : undefined;
+  const activeLikelihood = activeCellKey ? Number(activeCellKey.split("-")[0]) : null;
+  const activeImpact = activeCellKey ? Number(activeCellKey.split("-")[1]) : null;
+  const activeScore = activeLikelihood && activeImpact ? activeLikelihood * activeImpact : null;
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -87,7 +115,7 @@ export default function RisksOverview() {
         <p className="text-muted-foreground text-sm mt-1">Risk heat map and distribution analysis</p>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {riskSummary.map(item => (
           <Card key={item.label}>
             <CardContent className="p-4 text-center">
@@ -103,26 +131,37 @@ export default function RisksOverview() {
           <CardTitle className="text-base">Risk Heat Map (Likelihood vs Impact)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-80">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-destructive/30 text-destructive">Critical</Badge>
+            <Badge variant="outline" className="border-orange-500/40 text-orange-600">High</Badge>
+            <Badge variant="outline" className="border-warning/40 text-warning">Medium</Badge>
+            <Badge variant="outline" className="border-success/40 text-success">Low</Badge>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">How to read: X = Impact, Y = Likelihood. Larger points indicate higher severity.</p>
+          <div className="h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+              <ScatterChart margin={{ top: 16, right: 12, bottom: 22, left: 12 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <ReferenceLine x={3} stroke="hsl(var(--border))" strokeDasharray="4 4" />
+                <ReferenceLine y={3} stroke="hsl(var(--border))" strokeDasharray="4 4" />
                 <XAxis type="number" dataKey="x" name="Impact" domain={[0, 6]} ticks={[1, 2, 3, 4, 5]} label={{ value: "Impact →", position: "bottom", offset: 0 }} tick={{ fontSize: 12 }} />
                 <YAxis type="number" dataKey="y" name="Likelihood" domain={[0, 6]} ticks={[1, 2, 3, 4, 5]} label={{ value: "Likelihood →", angle: -90, position: "insideLeft" }} tick={{ fontSize: 12 }} />
                 <Tooltip content={({ payload }) => {
                   if (!payload?.length) return null;
                   const d = payload[0].payload;
                   return (
-                    <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+                    <div className="bg-card border border-border rounded-lg p-3 shadow-lg min-w-[220px]">
                       <p className="text-sm font-medium text-foreground">{d.name}</p>
-                      <p className="text-xs text-muted-foreground">Impact: {d.x} · Likelihood: {d.y}</p>
-                      <RiskLevelBadge level={d.level} />
+                      <p className="text-xs text-muted-foreground mt-1">Impact: {d.x} · Likelihood: {d.y} · Score: {d.score}</p>
+                      <p className="text-xs text-muted-foreground">Asset: {d.assetName}</p>
+                      <p className="text-xs text-muted-foreground">Owner: {d.owner} · Status: {d.status}</p>
+                      <div className="mt-2"><RiskLevelBadge level={d.level} /></div>
                     </div>
                   );
                 }} />
                 <Scatter data={heatMapData}>
                   {heatMapData.map((entry, i) => (
-                    <Cell key={i} fill={riskColors[entry.level]} r={8} />
+                    <Cell key={i} fill={riskColors[entry.level]} r={getPointRadius(entry.level)} stroke="hsl(var(--background))" strokeWidth={1.5} />
                   ))}
                 </Scatter>
               </ScatterChart>
@@ -136,6 +175,13 @@ export default function RisksOverview() {
           <CardTitle className="text-base">Risk Matrix Table (5x5)</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-destructive/30 text-destructive">Score 16-25: Critical Zone</Badge>
+            <Badge variant="outline" className="border-orange-500/40 text-orange-600">Score 9-15: High Zone</Badge>
+            <Badge variant="outline" className="border-warning/40 text-warning">Score 4-8: Medium Zone</Badge>
+            <Badge variant="outline" className="border-success/40 text-success">Score 1-3: Low Zone</Badge>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">Click a matrix cell to inspect all risks in that zone.</p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] border-separate border-spacing-1">
               <thead>
@@ -156,31 +202,28 @@ export default function RisksOverview() {
                       const key = `${likelihood}-${impact}`;
                       const cell = matrixData.get(key);
                       const count = cell?.count ?? 0;
+                      const score = likelihood * impact;
+                      const band = getScoreBand(score);
                       return (
                         <td key={key} className="p-1">
-                          <div
-                            className={`h-24 rounded-md border ${getMatrixCellClass(likelihood, impact)} p-1 overflow-y-auto`}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCellKey(key)}
+                            className={`h-24 w-full rounded-md border ${getMatrixCellClass(likelihood, impact)} p-2 text-left transition-all hover:brightness-95 ${activeCellKey === key ? "ring-2 ring-primary/50" : ""}`}
                             title={cell?.risks.map(r => r.title).join("\n") || "No risks in this cell"}
                           >
                             {count === 0 ? (
                               <div className="h-full flex items-center justify-center">
-                                <span className="text-xs font-semibold text-muted-foreground">0</span>
+                                <span className="text-xs font-semibold text-muted-foreground">No risk</span>
                               </div>
                             ) : (
                               <div className="space-y-1">
-                                <p className="text-[10px] font-semibold text-foreground/70">{count} risk{count > 1 ? "s" : ""}</p>
-                                {cell?.risks.map(risk => (
-                                  <div
-                                    key={risk.id}
-                                    className="text-[10px] leading-tight bg-background/70 border border-border rounded px-1 py-0.5 truncate"
-                                    title={`${risk.title} (${risk.level})`}
-                                  >
-                                    {risk.title}
-                                  </div>
-                                ))}
+                                <p className="text-[10px] font-semibold text-foreground/80">Score {score} · {band}</p>
+                                <p className="text-xl font-bold leading-none text-foreground">{count}</p>
+                                <p className="text-[10px] text-foreground/70 truncate">{cell?.risks[0]?.title}</p>
                               </div>
                             )}
-                          </div>
+                          </button>
                         </td>
                       );
                     })}
@@ -198,6 +241,35 @@ export default function RisksOverview() {
               Data warning: Some risks were outside the 1-5 likelihood/impact range and were skipped.
             </p>
           )}
+
+          <Card className="mt-4 border-dashed">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">
+                Selected Cell Details
+                {activeLikelihood && activeImpact && activeScore ? ` (L${activeLikelihood} x I${activeImpact} = ${activeScore})` : ""}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!activeCell || activeCell.count === 0 ? (
+                <p className="text-sm text-muted-foreground">No risks in selected cell.</p>
+              ) : (
+                <div className="space-y-2">
+                  {activeCell.risks.map((risk) => (
+                    <div key={risk.id} className="rounded-md border p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-foreground">{risk.title}</p>
+                        <div className="flex items-center gap-2">
+                          <RiskLevelBadge level={risk.level} />
+                          <RiskStatusBadge status={risk.status} />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">Asset: {risk.assetName} · Owner: {risk.owner}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </CardContent>
       </Card>
 

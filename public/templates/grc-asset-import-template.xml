@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GRCAssetImport version="1.0" generatedBy="Atlas-GRC">
+  <metadata>
+    <organization>YOUR_COMPANY_NAME</organization>
+    <exportDate>2026-03-15</exportDate>
+    <ownerTeam>Security Team</ownerTeam>
+    <note>
+      Fill each ReportHost record. Keep host-ip and host-fqdn values accurate.
+      This template is compatible with Asset Import generic XML parser.
+    </note>
+  </metadata>
+
+  <ReportHost name="web-prod-01">
+    <tag name="host-fqdn">web-prod-01.company.local</tag>
+    <tag name="host-ip">10.20.30.11</tag>
+    <tag name="operating-system">Ubuntu 22.04 LTS</tag>
+  </ReportHost>
+
+  <ReportHost name="db-prod-01">
+    <tag name="host-fqdn">db-prod-01.company.local</tag>
+    <tag name="host-ip">10.20.30.21</tag>
+    <tag name="operating-system">RHEL 9</tag>
+  </ReportHost>
+
+  <ReportHost name="laptop-finance-07">
+    <tag name="host-fqdn">laptop-finance-07.company.local</tag>
+    <tag name="host-ip">10.20.40.77</tag>
+    <tag name="operating-system">Windows 11 Pro</tag>
+  </ReportHost>
+</GRCAssetImport>
